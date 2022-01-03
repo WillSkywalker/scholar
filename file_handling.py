@@ -18,7 +18,7 @@ def write_to_json(data, output_filename, indent=2, sort_keys=True):
 
 def read_json(input_filename):
     with codecs.open(input_filename, 'r', encoding='utf-8') as input_file:
-        data = json.load(input_file, encoding='utf-8')
+        data = json.load(input_file)
     return data
 
 
@@ -26,7 +26,7 @@ def read_jsonlist(input_filename):
     data = []
     with codecs.open(input_filename, 'r', encoding='utf-8') as input_file:
         for line in input_file:
-            data.append(json.loads(line, encoding='utf-8'))
+            data.append(json.loads(line))
     return data
 
 

@@ -90,8 +90,7 @@ class IMDB:
             if (m_i + 1) % 5000 == 0:
                 print("Processed {:d} / 100000".format(m_i+1))
             # get the internal file name
-            parts = member.name.split(os.sep)
-
+            parts = member.name.split('/')
             if len(parts) > 3:
                 split = parts[1]  # train or test
                 label = parts[2]  # pos, neg, or unsup
@@ -99,7 +98,6 @@ class IMDB:
                 doc_id, rating = name.split('_')
                 doc_id = int(doc_id)
                 rating = int(rating)
-
                 # read the text from the archive
                 f = tar.extractfile(member)
                 bytes = f.read()
@@ -133,7 +131,7 @@ def main():
     (options, args) = parser.parse_args()
 
     root_dir = options.root_dir
-    IMDB(root_dir, download=True)
+    IMDB(root_dir, download=False)
 
 
 if __name__ == '__main__':
