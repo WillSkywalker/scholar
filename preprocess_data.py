@@ -280,7 +280,7 @@ def process_subset(items, parsed, label_fields, label_lists, vocab, output_dir, 
 
         if len(counter.keys()) > 0:
             # udpate the counts
-            mallet_strings.append(str(i) + '\t' + 'en' + '\t' + ' '.join(word_subset))
+            mallet_strings.append(str(i) + '\t' + 'nl' + '\t' + ' '.join(word_subset))
 
             dat_string = str(int(len(counter))) + ' '
             dat_string += ' '.join([str(k) + ':' + str(int(v)) for k, v in zip(list(counter.keys()), list(counter.values()))])
