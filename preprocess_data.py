@@ -333,32 +333,24 @@ def process_subset(items, parsed, label_fields, label_lists, vocab, output_dir, 
 def tokenize(text, strip_html=False, lower=True, keep_emails=False, keep_at_mentions=False, keep_numbers=False, keep_alphanum=False, min_length=3, stopwords=None, vocab=None):
     text = clean_text(text, strip_html, lower, keep_emails, keep_at_mentions)
     tokens = text.split()
-
     if stopwords is not None:
         tokens = ['_' if t in stopwords else t for t in tokens]
-
     # remove tokens that contain numbers
     if not keep_alphanum and not keep_numbers:
         tokens = [t if alpha.match(t) else '_' for t in tokens]
-
     # or just remove tokens that contain a combination of letters and numbers
     elif not keep_alphanum:
         tokens = [t if alpha_or_num.match(t) else '_' for t in tokens]
-
     # drop short tokens
     if min_length > 0:
         tokens = [t if len(t) >= min_length else '_' for t in tokens]
-
     counts = Counter()
-
     unigrams = [t for t in tokens if t != '_']
     counts.update(unigrams)
-
     if vocab is not None:
         tokens = [token for token in unigrams if token in vocab]
     else:
         tokens = unigrams
-
     return tokens, counts
 
 

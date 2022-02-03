@@ -27,8 +27,6 @@ def main(args):
                       help='Prefix of train set: default=%default')
     parser.add_option('--test-prefix', type=str, default=None,
                       help='Prefix of test set: default=%default')
-    parser.add_option('--labels', type=str, default=None,
-                      help='Read labels from input_dir/[train|test].labels.csv: default=%default')
     parser.add_option('--prior-covars', type=str, default=None,
                       help='Read prior covariates from files with these names (comma-separated): default=%default')
     parser.add_option('--topic-covars', type=str, default=None,
@@ -65,8 +63,6 @@ def main(args):
                       help='Number of dev folds: default=%default')
     parser.add_option('--dev-fold', type=int, default=0,
                       help='Fold to use as dev (if dev_folds > 0): default=%default')
-    parser.add_option('--device', type=int, default=None,
-                      help='GPU to use: default=%default')
     parser.add_option('--seed', type=int, default=None,
                       help='Random seed: default=%default')
 
@@ -88,17 +84,12 @@ def main(args):
 
     # load the training data
     train_X, vocab, row_selector, train_ids = load_word_counts(input_dir, options.train_prefix)
-    train_labels, label_type, label_names, n_labels = load_labels(input_dir, options.train_prefix, row_selector, options)
-    train_prior_covars, prior_covar_selector, prior_covar_names, n_prior_covars = load_covariates(input_dir, options.train_prefix, row_selector, options.prior_covars, options.min_prior_covar_count)
-    train_topic_covars, topic_covar_selector, topic_covar_names, n_topic_covars = load_covariates(input_dir, options.train_prefix, row_selector, options.topic_covars, options.min_topic_covar_count)
     options.n_train, vocab_size = train_X.shape
-    options.n_labels = n_labels
-
-    if n_labels > 0:
-        print("Train label proportions:", np.mean(train_labels, axis=0))
 
     # split into training and dev if desired
     train_indices, dev_indices = train_dev_split(options, rng)
+    train_labels, label_type, label_names, n_labels = load_labels(input_dir, options.train_prefix, row_selector, options)
+
     train_X, dev_X = split_matrix(train_X, train_indices, dev_indices)
     train_labels, dev_labels = split_matrix(train_labels, train_indices, dev_indices)
     train_prior_covars, dev_prior_covars = split_matrix(train_prior_covars, train_indices, dev_indices)
@@ -143,7 +134,7 @@ def main(args):
     embeddings, update_embeddings = load_word_vectors(options, rng, vocab)
 
     # create the model
-    model = Scholar(network_architecture, alpha=options.alpha, learning_rate=options.learning_rate, init_embeddings=embeddings, update_embeddings=update_embeddings, init_bg=init_bg, adam_beta1=options.momentum, device=options.device, seed=seed, classify_from_covars=options.covars_predict)
+    model = Scholar(network_architecture, alpha=options.alpha, learning_rate=options.learning_rate, init_embeddings=embeddings, update_embeddings=update_embeddings, init_bg=init_bg, adam_beta1=options.momentum, seed=seed, classify_from_covars=options.covars_predict)
 
     # train the model
     print("Optimizing full model")
