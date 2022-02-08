@@ -37,18 +37,23 @@ alphanum = re.compile('^[a-zA-Z0-9_]+$')
 
 class LDAModel(BaseEstimator):
 
-    def __init__(self, K, alpha, beta, id2word, train_text):
+    def __init__(self, K, alpha, beta, id2word, corpus, train_text):
         self.lda_model = None
         self.K = K
         self.alpha = alpha
         self.beta = beta
         self.id2word = id2word
+        self.corpus = corpus
         self.train_text = train_text
 
     def fit(self, x, Y=None):
         print('Start training: K=%d, alpha=%s, beta=%s' % (self.K, self.alpha, self.beta))
-        self.lda_model = gensim.models.ldamulticore.LdaMulticore(x, 
-            num_topics=self.K, alpha=self.alpha, eta=self.beta, id2word=self.id2word, workers=2)
+        if self.alpha == 'auto' or self.beta == 'auto':
+            self.lda_model = gensim.models.ldamodel.LdaModel(x, num_topics=self.K,
+                alpha=self.alpha, eta=self.beta, id2word=self.id2word)
+        else:
+            self.lda_model = gensim.models.ldamulticore.LdaMulticore(x, 
+                num_topics=self.K, alpha=self.alpha, eta=self.beta, id2word=self.id2word, workers=16)
 
     def transform(self, x):
         doc_topic_distr = []
@@ -61,8 +66,7 @@ class LDAModel(BaseEstimator):
         return self.transform(x)
 
     def coherence(self, x):
-        coherence_score = gensim.models.coherencemodel.CoherenceModel(self.lda_model, 
-            texts=self.train_text, dictionary=self.id2word, coherence='c_npmi').get_coherence()
+        coherence_score = compute_npmi(self.lda_model, self.corpus, self.id2word)
         return coherence_score
 
     def perplexity(self, x):
@@ -133,6 +137,7 @@ def main(args):
         test_topic_covars = None
 
     stopword_list = fh.read_text(os.path.join('stopwords', 'nl_stopwords.txt'))
+    # stopword_set = set([stopword_list])
     stopword_set = set([])
 
     corpus = gensim.matutils.Sparse2Corpus(train_X)
@@ -156,12 +161,12 @@ def main(args):
     # ldamodel = gensim.models.ldamodel.LdaModel(corpus, num_topics=options.n_topics, id2word=dictionary)
     # ldamodel = gensim.models.ldamodel.LdaModel(text_corpus, num_topics=options.n_topics, id2word=id2word)
 
-    search_params = {'K': list(range(3, 21)), 
-        'alpha': ['symmetric', 'auto', 0.1, 0.3, 0.5, 0.7, 0.9, 1, 2, 5],
-        'beta': ['symmetric', 'auto', 0.1, 0.3, 0.5, 0.7, 0.9, 1, 2, 5]
+    search_params = {'K': list(range(3, 4)), 
+        # 'alpha': ['symmetric', 'auto', 0.1, 0.3, 0.5, 0.7, 0.9, 1, 2, 5],
+        # 'beta': ['symmetric', 'auto', 0.1, 0.3, 0.5, 0.7, 0.9, 1, 2, 5]
     }
 
-    lda = LDAModel(3, 'symmetric', 'symmetric', id2word, train_text=train_text)
+    lda = LDAModel(3, 'symmetric', 'symmetric', id2word, corpus=text_corpus ,train_text=train_text)
     grid_model = GridSearchCV(lda, param_grid=search_params, scoring=LDAModel.score, refit='perplexity')
     grid_model.fit(text_corpus)
     test_corpus = gensim.matutils.Sparse2Corpus(test_X)
@@ -285,6 +290,37 @@ def split_matrix(train_X, train_indices, dev_indices):
         return train_X, dev_X
     else:
         return train_X, None
+
+
+def compute_npmi(model, corpus, id2word, n=10):
+
+    n_terms = len(id2word)
+    n_docs = id2word.num_docs
+    ref_counts = gensim.matutils.corpus2dense(corpus, num_terms=n_terms, num_docs=n_docs).T
+
+    npmi_means = []
+    for idx in range(model.num_topics):
+        words = [x[0] for x in model.get_topic_terms(idx)]
+        npmi_vals = []
+        for word_i, word1 in enumerate(words[:n]):
+            for word2 in words[word_i+1:n]:
+
+                col1 = np.array(ref_counts[:, word1] > 0, dtype=int)
+                col2 = np.array(ref_counts[:, word2] > 0, dtype=int)
+                c1 = col1.sum()
+                c2 = col2.sum()
+                c12 = np.sum(col1 * col2)
+                if c12 == 0:
+                    npmi = 0.0
+                else:
+                    npmi = (np.log10(n_docs) + np.log10(c12) - np.log10(c1) - np.log10(c2)) / (np.log10(n_docs) - np.log10(c12))
+                npmi_vals.append(npmi)
+        print(str(np.mean(npmi_vals)) + ': ' + ' '.join([id2word[w] for w in words[:n]]))
+        npmi_means.append(np.mean(npmi_vals))
+    print(np.mean(npmi_means))
+    return np.mean(npmi_means)
+
+
 
 
 def tokenize(text, strip_html=False, lower=True, keep_emails=False, keep_at_mentions=False, keep_numbers=False, keep_alphanum=False, min_length=3, stopwords=None, vocab=None):
