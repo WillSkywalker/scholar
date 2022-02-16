@@ -74,41 +74,15 @@ class Kinderwens:
             if (m_i + 1) % 50 == 0:
                 print("Processed {:d} / {:d}".format(m_i+1, dta.shape[0]))
 
-            if member['both_Word_per_doc'] > 0:
-                if member['nonresponse1'] != 0:
-                    doc = {
-                        'id': member['nomem_encr'],
-                        'text': member['SecondOpen'],
-                        'text1': member['FirstOpen'],
-                        'text2': member['SecondOpen'],
-                        'intention': member['Intentie1'],
-                        'positivity': member['Intentie1'] in POSITIVE_SET,
-                        'certainty': member['Intentie1'] in CERTAINTY_SET,
-                        'maternity': member['Zelf_Kind'] == 'Ja',
-                        }
-                elif member['nonresponse2'] != 0:
-                    doc = {
-                        'id': member['nomem_encr'],
-                        'text': member['FirstOpen'],
-                        'text1': member['FirstOpen'],
-                        'text2': member['SecondOpen'],
-                        'intention': member['Intentie1'],
-                        'positivity': member['Intentie1'] in POSITIVE_SET,
-                        'certainty': member['Intentie1'] in CERTAINTY_SET,
-                        'maternity': member['Zelf_Kind'] == 'Ja',
-                        }
-                else:
-                    doc = {
-                        'id': member['nomem_encr'],
-                        'text': member['AllOpen'],
-                        'text1': member['FirstOpen'],
-                        'text2': member['SecondOpen'],
-                        'intention': member['Intentie1'],
-                        'positivity': member['Intentie1'] in POSITIVE_SET,
-                        'certainty': member['Intentie1'] in CERTAINTY_SET,
-                        'maternity': member['Zelf_Kind'] == 'Ja',
-                        }
-
+            if member['q1_Word_per_doc'] > 0 and member['nonresponse1'] != 0:
+                doc = {
+                    'id': member['nomem_encr'],
+                    'text': member['FirstOpen'],
+                    'intention': member['Intentie1'],
+                    'positivity': member['Intentie1'] in POSITIVE_SET,
+                    'certainty': member['Intentie1'] in CERTAINTY_SET,
+                    'maternity': member['Zelf_Kind'] == 'Ja',
+                    }
 
                 if detect(doc['text']) in ['nl', 'af']:
                     all_lines.append(doc)
@@ -126,7 +100,7 @@ class Kinderwens:
 def main():
     usage = "%prog"
     parser = OptionParser(usage=usage)
-    parser.add_option('--root-dir', type=str, default='./data/kinderwens',
+    parser.add_option('--root-dir', type=str, default='./data/kinderwens_q1',
                       help='Destination directory: default=%default')
     #parser.add_option('--boolarg', action="store_true", dest="boolarg", default=False,
     #                  help='Keyword argument: default=%default')
