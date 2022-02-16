@@ -24,6 +24,7 @@ from sklearn.utils.estimator_checks import check_estimator
 from sklearn.base import BaseEstimator, ClassifierMixin
 from sklearn.utils.validation import check_X_y, check_array, check_is_fitted
 
+
 # compile some regexes
 punct_chars = list(set(string.punctuation) - set("'"))
 punct_chars.sort()
@@ -137,8 +138,8 @@ def main(args):
         test_topic_covars = None
 
     stopword_list = fh.read_text(os.path.join('stopwords', 'nl_stopwords.txt'))
-    # stopword_set = set([stopword_list])
-    stopword_set = set([])
+    stopword_set = {s.strip() for s in stopword_list}
+    # stopword_set = set([])
 
     corpus = gensim.matutils.Sparse2Corpus(train_X)
 
@@ -154,6 +155,8 @@ def main(args):
 
     id2word = gensim.corpora.Dictionary(train_text)
     text_corpus = [id2word.doc2bow(text) for text in train_text]
+    tfidf_model = gensim.models.TfidfModel(text_corpus)
+    tfidf_corpus = tfidf_model[text_corpus]
 
 
     dictionary = {i:w for i, w in enumerate(vocab)}
@@ -166,13 +169,29 @@ def main(args):
         # 'beta': ['symmetric', 'auto', 0.1, 0.3, 0.5, 0.7, 0.9, 1, 2, 5]
     }
 
-    lda = LDAModel(3, 'symmetric', 'symmetric', id2word, corpus=text_corpus ,train_text=train_text)
-    grid_model = GridSearchCV(lda, param_grid=search_params, scoring=LDAModel.score, refit='perplexity')
-    grid_model.fit(text_corpus)
     test_corpus = gensim.matutils.Sparse2Corpus(test_X)
-    pprint(grid_model.score(test_corpus))
 
-    pandas.DataFrame(grid_model.cv_results_).to_csv('LDA_gridsearch.csv')
+
+    lda = LDAModel(3, 'symmetric', 'symmetric', id2word, corpus=text_corpus ,train_text=train_text)
+    lda1 = LDAModel(6, 0.3, 0.7, id2word, corpus=text_corpus ,train_text=train_text)
+    lda1.fit(text_corpus)
+    lda1.score(test_corpus)
+    lda2 = LDAModel(6, 'auto', 5, id2word, corpus=text_corpus ,train_text=train_text)
+    lda2.fit(text_corpus)
+    lda2.score(test_corpus)
+
+    lda3 = LDAModel(6, 0.3, 0.7, id2word, corpus=tfidf_corpus,train_text=train_text)
+    lda3.fit(tfidf_corpus)
+    lda3.score(test_corpus)
+    lda4 = LDAModel(6, 'auto', 5, id2word, corpus=tfidf_corpus,train_text=train_text)
+    lda4.fit(tfidf_corpus)
+    lda4.score(test_corpus)
+
+    # grid_model = GridSearchCV(lda, param_grid=search_params, scoring=LDAModel.score, refit='perplexity')
+    # grid_model.fit(text_corpus)
+    # pprint(grid_model.score(test_corpus))
+
+    # pandas.DataFrame(grid_model.cv_results_).to_csv('LDA_gridsearch.csv')
 
 
 
@@ -191,9 +210,17 @@ def main(args):
 
 
     # # Visualize the topics
-    # LDAvis_prepared = pyLDAvis.gensim_models.prepare(ldamodel, text_corpus, id2word)
-    # pyLDAvis.save_html(LDAvis_prepared, 'lda.html')
+    LDAvis_prepared1 = pyLDAvis.gensim_models.prepare(lda1.lda_model, text_corpus, id2word)
+    pyLDAvis.save_html(LDAvis_prepared1, 'lda1.html')
 
+    LDAvis_prepared2 = pyLDAvis.gensim_models.prepare(lda2.lda_model, text_corpus, id2word)
+    pyLDAvis.save_html(LDAvis_prepared2, 'lda2.html')
+
+    LDAvis_prepared3 = pyLDAvis.gensim_models.prepare(lda3.lda_model, text_corpus, id2word)
+    pyLDAvis.save_html(LDAvis_prepared3, 'lda3.html')
+
+    LDAvis_prepared4 = pyLDAvis.gensim_models.prepare(lda4.lda_model, text_corpus, id2word)
+    pyLDAvis.save_html(LDAvis_prepared4, 'lda4.html')
 
 
 def run_lda(alpha, beta, K):
