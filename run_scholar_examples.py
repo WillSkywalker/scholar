@@ -9,6 +9,111 @@ import pandas as pd
 import file_handling as fh
 from scholar import Scholar
 
+import re
+from pprint import pprint
+import pandas
+
+import string
+
+from collections import Counter
+import pickle 
+import pyLDAvis
+import pyLDAvis.gensim_models
+
+from sklearn.feature_extraction.text import CountVectorizer
+from sklearn.decomposition import LatentDirichletAllocation
+from sklearn.model_selection import GridSearchCV
+from sklearn.utils.estimator_checks import check_estimator
+from sklearn.base import BaseEstimator, ClassifierMixin
+from sklearn.utils.validation import check_X_y, check_array, check_is_fitted
+
+
+
+class ScholarModel(BaseEstimator):
+
+    def __init__(self, K, learning_rate, embeddings, options, 
+        vocab_size, label_type, n_labels, n_prior_covars, n_topic_covars):
+        self.K = K
+        self.alpha = alpha
+        self.learning_rate = learning_rate
+        if embeddings is None:
+            self.emb_dim = 300
+        else:
+            self.emb_dim = embeddings.shape[1]
+        self.embeddings = embeddings
+
+        self.options = options
+        self.vocab_size = vocab_size
+        self.label_type = label_type
+        self.n_labels = n_labels
+        self.n_prior_covars = n_prior_covars
+        self.n_topic_covars = n_topic_covars
+
+        self.init_bg = init_bg
+        self.rng = np.random.RandomState(np.random.randint(0, 100000))
+
+
+
+
+    def fit(self, x, Y=None):
+        train_X = x['train_X']
+        train_labels = x['train_labels']
+        train_prior_covars = x['train_prior_covars']
+        train_topic_covars = x['train_topic_covars']
+        print('Start training: K=%d, alpha=%s, rate=%s' % (self.K, self.alpha, self.learning_rate))
+
+        if self.embeddings is None:
+            self.emb_dim = 300
+        else:
+            self.emb_dim = self.embeddings.shape[1]
+
+        network_architecture = make_network(
+            self.K, self.emb_dim, self.options, self.vocab_size, self.label_type, 
+            self.n_labels, self.n_prior_covars, self.n_topic_covars)
+        self.model = Scholar(
+            network_architecture, 
+            alpha=self.alpha, 
+            learning_rate=self.learning_rate, 
+            init_embeddings=self.embeddings, 
+            update_embeddings=True, 
+            init_bg=self.init_bg, 
+            adam_beta1=self.options.momentum, 
+            device=self.options.device, 
+            seed=None, 
+            classify_from_covars=self.options.covars_predict)
+
+        self.model = train(self.model, network_architecture, train_X, train_labels, 
+            train_prior_covars, train_topic_covars, training_epochs=options.epochs, 
+            batch_size=options.batch_size, rng=self.rng, X_dev=None, Y_dev=None, 
+            PC_dev=None, TC_dev=None) # TODO
+
+
+    def transform(self, x):
+        doc_topic_distr = []
+        for doc in x:
+            doc_topic_distr.append(get_document_topics(doc))
+        return doc_topic_distr
+
+    def fit_transform(self, x):
+        self.fit(x)
+        return self.transform(x)
+
+    def coherence(self, x):
+        coherence_score = compute_npmi(self.lda_model, self.corpus, self.id2word)
+        return coherence_score
+
+    def perplexity(self, x):
+        return np.exp(-1. * self.lda_model.log_perplexity(x))
+
+    def score(self, x, y=None):
+        print('Generating scores: K=%d, alpha=%s, beta=%s' % (self.K, self.alpha, self.beta))
+        scores = {'perplexity': self.perplexity(x),
+                'coherence': self.coherence(x)}
+        pprint(scores)
+        print('====================\n\n\n')
+        return scores
+
+
 
 def main(args):
     usage = "%prog input_dir"
@@ -132,21 +237,30 @@ def main(args):
     if options.no_bg:
         init_bg = np.zeros_like(init_bg)
 
-
-    # load word vectors
-    embeddings, update_embeddings = load_word_vectors(options, rng, vocab)
-
-
     # combine the network configuration parameters into a dictionary
-    network_architecture = make_network(options, vocab_size, label_type, n_labels, n_prior_covars, n_topic_covars)
+    # network_architecture = make_network(options, vocab_size, label_type, n_labels, n_prior_covars, n_topic_covars)
 
     print("Network architecture:")
     for key, val in network_architecture.items():
         print(key + ':', val)
 
+    # load word vectors
+    rand_embeddings, update_embeddings = load_word_vectors(None, rng, vocab)
+    conll17_embeddings, update_embeddings = load_word_vectors('conll17.bin', rng, vocab)
+    coosto_embeddings, update_embeddings = load_word_vectors('coosto.bin', rng, vocab)
+    cowbig_embeddings, update_embeddings = load_word_vectors('cow-big.txt', rng, vocab)
+    roularta_embeddings, update_embeddings = load_word_vectors('roularta-320.txt', rng, vocab)
+
+    model = ScholarModel(2, learning_rate=options.learning_rate, embeddings=None, options=options, 
+        vocab_size, label_type, n_labels, n_prior_covars, n_topic_covars)
+
+
+    trainset = pd.DataFrame() # TODO
+    model.fit(x)
+
 
     # create the model
-    model = Scholar(network_architecture, alpha=options.alpha, learning_rate=options.learning_rate, init_embeddings=embeddings, update_embeddings=update_embeddings, init_bg=init_bg, adam_beta1=options.momentum, device=options.device, seed=seed, classify_from_covars=options.covars_predict)
+    # model = Scholar(network_architecture, alpha=options.alpha, learning_rate=options.learning_rate, init_embeddings=embeddings, update_embeddings=update_embeddings, init_bg=init_bg, adam_beta1=options.momentum, device=options.device, seed=seed, classify_from_covars=options.covars_predict)
 
     # train the model
     print("Optimizing full model")
@@ -330,24 +444,17 @@ def get_init_bg(data):
     return bg
 
 
-def load_word_vectors(options, rng, vocab):
+def load_word_vectors(word2vec_file, rng, vocab):
     # load word2vec vectors if given
-    if options.word2vec_file is not None:
+    if word2vec_file is not None:
         vocab_size = len(vocab)
         vocab_dict = dict(zip(vocab, range(vocab_size)))
         # randomly initialize word vectors for each term in the vocabualry
-
+        embeddings = np.array(rng.rand(300, vocab_size) * 0.25 - 0.5, dtype=np.float32)
+        count = 0
         print("Loading word vectors")
         # load the word2vec vectors
-        if options.word2vec_file.endswith('.txt'):
-            pretrained = gensim.models.KeyedVectors.load_word2vec_format(options.word2vec_file)
-        else:
-            pretrained = gensim.models.KeyedVectors.load_word2vec_format(options.word2vec_file, binary=True)
-
-        options.emb_dim = pretrained.vector_size
-
-        embeddings = np.array(rng.rand(options.emb_dim, vocab_size) * 0.25 - 0.5, dtype=np.float32)
-        count = 0
+        pretrained = gensim.models.KeyedVectors.load_word2vec_format(word2vec_file, binary=True)
 
         # replace the randomly initialized vectors with the word2vec ones for any that are available
         for word, index in vocab_dict.items():
@@ -356,7 +463,7 @@ def load_word_vectors(options, rng, vocab):
                 embeddings[:, index] = pretrained[word]
 
         print("Found embeddings for %d words" % count)
-        update_embeddings = True
+        update_embeddings = False
     else:
         embeddings = None
         update_embeddings = True
@@ -364,11 +471,11 @@ def load_word_vectors(options, rng, vocab):
     return embeddings, update_embeddings
 
 
-def make_network(options, vocab_size, label_type=None, n_labels=0, n_prior_covars=0, n_topic_covars=0):
+def make_network(K, emb_dim, options, vocab_size, label_type=None, n_labels=0, n_prior_covars=0, n_topic_covars=0):
     # Assemble the network configuration parameters into a dictionary
     network_architecture = \
-        dict(embedding_dim=options.emb_dim,
-             n_topics=options.n_topics,
+        dict(embedding_dim=emb_dim,
+             n_topics=K,
              vocab_size=vocab_size,
              label_type=label_type,
              n_labels=n_labels,

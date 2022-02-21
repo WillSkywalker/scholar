@@ -74,7 +74,7 @@ class Kinderwens:
             if (m_i + 1) % 50 == 0:
                 print("Processed {:d} / {:d}".format(m_i+1, dta.shape[0]))
 
-            if member['q1_Word_per_doc'] > 0 and member['nonresponse1'] != 0:
+            if member['q1_Word_per_doc'] > 0 and member['nonresponse1'] == 0:
                 doc = {
                     'id': member['nomem_encr'],
                     'text': member['FirstOpen'],

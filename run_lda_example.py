@@ -83,9 +83,191 @@ class LDAModel(BaseEstimator):
 
 
 
-
-
 def main(args):
+    usage = "%prog input_dir"
+    parser = OptionParser(usage=usage)
+    parser.add_option('-k', dest='n_topics', type=int, default=20,
+                      help='Size of latent representation (~num topics): default=%default')
+    parser.add_option('-l', dest='learning_rate', type=float, default=0.002,
+                      help='Initial learning rate: default=%default')
+    parser.add_option('-m', dest='momentum', type=float, default=0.99,
+                      help='beta1 for Adam: default=%default')
+    parser.add_option('--batch-size', dest='batch_size', type=int, default=200,
+                      help='Size of minibatches: default=%default')
+    parser.add_option('--epochs', type=int, default=200,
+                      help='Number of epochs: default=%default')
+    parser.add_option('--train-prefix', type=str, default='train',
+                      help='Prefix of train set: default=%default')
+    parser.add_option('--test-prefix', type=str, default=None,
+                      help='Prefix of test set: default=%default')
+    parser.add_option('--labels', type=str, default=None,
+                      help='Read labels from input_dir/[train|test].labels.csv: default=%default')
+    parser.add_option('--prior-covars', type=str, default=None,
+                      help='Read prior covariates from files with these names (comma-separated): default=%default')
+    parser.add_option('--topic-covars', type=str, default=None,
+                      help='Read topic covariates from files with these names (comma-separated): default=%default')
+    parser.add_option('--interactions', action="store_true", default=False,
+                      help='Use interactions between topics and topic covariates: default=%default')
+    parser.add_option('--covars-predict', action="store_true", default=False,
+                      help='Use covariates as input to classifier: default=%default')
+    parser.add_option('--min-prior-covar-count', type=int, default=None,
+                      help='Drop prior covariates with less than this many non-zero values in the training dataa: default=%default')
+    parser.add_option('--min-topic-covar-count', type=int, default=None,
+                      help='Drop topic covariates with less than this many non-zero values in the training dataa: default=%default')
+    parser.add_option('-r', action="store_true", default=False,
+                      help='Use default regularization: default=%default')
+    parser.add_option('--l1-topics', type=float, default=0.0,
+                      help='Regularization strength on topic weights: default=%default')
+    parser.add_option('--l1-topic-covars', type=float, default=0.0,
+                      help='Regularization strength on topic covariate weights: default=%default')
+    parser.add_option('--l1-interactions', type=float, default=0.0,
+                      help='Regularization strength on topic covariate interaction weights: default=%default')
+    parser.add_option('--l2-prior-covars', type=float, default=0.0,
+                      help='Regularization strength on prior covariate weights: default=%default')
+    parser.add_option('-o', dest='output_dir', type=str, default='output',
+                      help='Output directory: default=%default')
+    parser.add_option('--emb-dim', type=int, default=300,
+                      help='Dimension of input embeddings: default=%default')
+    parser.add_option('--w2v', dest='word2vec_file', type=str, default=None,
+                      help='Use this word2vec .bin file to initialize and fix embeddings: default=%default')
+    parser.add_option('--alpha', type=float, default=1.0,
+                      help='Hyperparameter for logistic normal prior: default=%default')
+    parser.add_option('--no-bg', action="store_true", default=False,
+                      help='Do not use background freq: default=%default')
+    parser.add_option('--dev-folds', type=int, default=0,
+                      help='Number of dev folds: default=%default')
+    parser.add_option('--dev-fold', type=int, default=0,
+                      help='Fold to use as dev (if dev_folds > 0): default=%default')
+    parser.add_option('--device', type=int, default=None,
+                      help='GPU to use: default=%default')
+    parser.add_option('--seed', type=int, default=None,
+                      help='Random seed: default=%default')
+
+    options, args = parser.parse_args(args)
+
+    input_dir = args[0]
+
+    if options.r:
+        options.l1_topics = 1.0
+        options.l1_topic_covars = 1.0
+        options.l1_interactions = 1.0
+
+    if options.seed is not None:
+        rng = np.random.RandomState(options.seed)
+        seed = options.seed
+    else:
+        rng = np.random.RandomState(np.random.randint(0, 100000))
+        seed = None
+
+    # load the training data
+    train_X, vocab, row_selector, train_ids = load_word_counts(input_dir, options.train_prefix)
+    train_labels, label_type, label_names, n_labels = load_labels(input_dir, options.train_prefix, row_selector, options)
+    train_prior_covars, prior_covar_selector, prior_covar_names, n_prior_covars = load_covariates(input_dir, options.train_prefix, row_selector, options.prior_covars, options.min_prior_covar_count)
+    train_topic_covars, topic_covar_selector, topic_covar_names, n_topic_covars = load_covariates(input_dir, options.train_prefix, row_selector, options.topic_covars, options.min_topic_covar_count)
+    options.n_train, vocab_size = train_X.shape
+    options.n_labels = n_labels
+
+    if n_labels > 0:
+        print("Train label proportions:", np.mean(train_labels, axis=0))
+
+    # split into training and dev if desired
+    train_indices, dev_indices = train_dev_split(options, rng)
+    train_X, dev_X = split_matrix(train_X, train_indices, dev_indices)
+    train_labels, dev_labels = split_matrix(train_labels, train_indices, dev_indices)
+    train_prior_covars, dev_prior_covars = split_matrix(train_prior_covars, train_indices, dev_indices)
+    train_topic_covars, dev_topic_covars = split_matrix(train_topic_covars, train_indices, dev_indices)
+    if dev_indices is not None:
+        dev_ids = [train_ids[i] for i in dev_indices]
+        train_ids = [train_ids[i] for i in train_indices]
+    else:
+        dev_ids = None
+
+
+    n_train, _ = train_X.shape
+
+    # load the test data
+    if options.test_prefix is not None:
+        test_X, _, row_selector, test_ids = load_word_counts(input_dir, options.test_prefix, vocab=vocab)
+        test_labels, _, _, _ = load_labels(input_dir, options.test_prefix, row_selector, options)
+        test_prior_covars, _, _, _ = load_covariates(input_dir, options.test_prefix, row_selector, options.prior_covars, covariate_selector=prior_covar_selector)
+        test_topic_covars, _, _, _ = load_covariates(input_dir, options.test_prefix, row_selector, options.topic_covars, covariate_selector=topic_covar_selector)
+        n_test, _ = test_X.shape
+
+    else:
+        test_X = None
+        n_test = 0
+        test_labels = None
+        test_prior_covars = None
+        test_topic_covars = None
+
+    # initialize the background using overall word frequencies
+    init_bg = get_init_bg(train_X)
+    if options.no_bg:
+        init_bg = np.zeros_like(init_bg)
+
+    # combine the network configuration parameters into a dictionary
+    network_architecture = make_network(options, vocab_size, label_type, n_labels, n_prior_covars, n_topic_covars)
+
+    print("Network architecture:")
+    for key, val in network_architecture.items():
+        print(key + ':', val)
+
+    # load word vectors
+    embeddings, update_embeddings = load_word_vectors(options, rng, vocab)
+
+    # create the model
+    model = Scholar(network_architecture, alpha=options.alpha, learning_rate=options.learning_rate, init_embeddings=embeddings, update_embeddings=update_embeddings, init_bg=init_bg, adam_beta1=options.momentum, device=options.device, seed=seed, classify_from_covars=options.covars_predict)
+
+    # train the model
+    print("Optimizing full model")
+    model = train(model, network_architecture, train_X, train_labels, train_prior_covars, train_topic_covars, training_epochs=options.epochs, batch_size=options.batch_size, rng=rng, X_dev=dev_X, Y_dev=dev_labels, PC_dev=dev_prior_covars, TC_dev=dev_topic_covars)
+
+    # make output directory
+    fh.makedirs(options.output_dir)
+
+    # display and save weights
+    print_and_save_weights(options, model, vocab, prior_covar_names, topic_covar_names)
+
+    # Evaluate perplexity on dev and test data
+    if dev_X is not None:
+        perplexity = evaluate_perplexity(model, dev_X, dev_labels, dev_prior_covars, dev_topic_covars, options.batch_size, eta_bn_prop=0.0)
+        print("Dev perplexity = %0.4f" % perplexity)
+        fh.write_list_to_text([str(perplexity)], os.path.join(options.output_dir, 'perplexity.dev.txt'))
+
+    if test_X is not None:
+        perplexity = evaluate_perplexity(model, test_X, test_labels, test_prior_covars, test_topic_covars, options.batch_size, eta_bn_prop=0.0)
+        print("Test perplexity = %0.4f" % perplexity)
+        fh.write_list_to_text([str(perplexity)], os.path.join(options.output_dir, 'perplexity.test.txt'))
+
+    # evaluate accuracy on predicting labels
+    if n_labels > 0:
+        print("Predicting labels")
+        predict_labels_and_evaluate(model, train_X, train_labels, train_prior_covars, train_topic_covars, options.output_dir, subset='train')
+
+        if dev_X is not None:
+            predict_labels_and_evaluate(model, dev_X, dev_labels, dev_prior_covars, dev_topic_covars, options.output_dir, subset='dev')
+
+        if test_X is not None:
+            predict_labels_and_evaluate(model, test_X, test_labels, test_prior_covars, test_topic_covars, options.output_dir, subset='test')
+
+    # print label probabilities for each topic
+    if n_labels > 0:
+        print_topic_label_associations(options, label_names, model, n_prior_covars, n_topic_covars)
+
+    # save document representations
+    print("Saving document representations")
+    save_document_representations(model, train_X, train_labels, train_prior_covars, train_topic_covars, train_ids, options.output_dir, 'train', batch_size=options.batch_size)
+
+    if dev_X is not None:
+        save_document_representations(model, dev_X, dev_labels, dev_prior_covars, dev_topic_covars, dev_ids, options.output_dir, 'dev', batch_size=options.batch_size)
+
+    if n_test > 0:
+        save_document_representations(model, test_X, test_labels, test_prior_covars, test_topic_covars, test_ids, options.output_dir, 'test', batch_size=options.batch_size)
+
+
+
+
+def main_(args):
     usage = "%prog input_dir"
     parser = OptionParser(usage=usage)
     parser.add_option('-k', dest='n_topics', type=int, default=20,
