@@ -41,7 +41,7 @@ class ScholarModel(BaseEstimator):
         if embeddings is None:
             self.emb_dim = 300
         else:
-            self.emb_dim = embeddings.shape[1]
+            self.emb_dim = embeddings.shape[0]
         self.embeddings = embeddings
 
         self.options = options
@@ -74,7 +74,7 @@ class ScholarModel(BaseEstimator):
         if self.embeddings is None:
             self.emb_dim = 300
         else:
-            self.emb_dim = self.embeddings.shape[1]
+            self.emb_dim = self.embeddings.shape[0]
 
         network_architecture = make_network(
             self.K, self.emb_dim, self.options, self.vocab_size, self.label_type, 
@@ -282,9 +282,9 @@ def main(args):
 
     # load word vectors
     # rand_embeddings, update_embeddings = load_word_vectors(None, rng, vocab)
-    # conll17_embeddings, update_embeddings = load_word_vectors('conll17.bin', rng, vocab)
-    # coosto_embeddings, update_embeddings = load_word_vectors('coosto.bin', rng, vocab)
-    # cowbig_embeddings, update_embeddings = load_word_vectors('cow-big.txt', rng, vocab)
+    conll17_embeddings, update_embeddings = load_word_vectors('conll17.bin', rng, vocab)
+    coosto_embeddings, update_embeddings = load_word_vectors('coosto.bin', rng, vocab)
+    cowbig_embeddings, update_embeddings = load_word_vectors('cow-big.txt', rng, vocab)
     roularta_embeddings, update_embeddings = load_word_vectors('roularta-320.txt', rng, vocab)
 
     model = ScholarModel(vocab, input_dir, 2, alpha=options.alpha, learning_rate=options.learning_rate, 
@@ -315,10 +315,10 @@ def main(args):
         columns=['test_X', 'test_labels', 'test_prior_covars', 'test_topic_covars']) # TODO
 
     search_params = {'K': list(range(3, 4)), 
-        # 'alpha': [ 0.1, 0.3, 0.5, 0.7, 0.9, 1, 2, 5],
-        # 'learning_rate': [0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05, 0.1, 0.5],
-        # 'embeddings': [None, conll17_embeddings, coosto_embeddings, cowbig_embeddings, roularta_embeddings]
-        'embeddings': [None, roularta_embeddings]
+        'alpha': [ 0.1, 0.3, 0.5, 0.7, 0.9, 1, 2, 5],
+        'learning_rate': [0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05, 0.1, 0.5],
+        'embeddings': [None, conll17_embeddings, coosto_embeddings, cowbig_embeddings, roularta_embeddings]
+        # 'embeddings': [None, roularta_embeddings]
     }
 
     grid_model = GridSearchCV(model, param_grid=search_params, scoring=ScholarModel.score, refit='perplexity')
