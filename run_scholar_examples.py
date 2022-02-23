@@ -31,8 +31,10 @@ from sklearn.utils.validation import check_X_y, check_array, check_is_fitted
 
 class ScholarModel(BaseEstimator):
 
-    def __init__(self, K, learning_rate, embeddings, options, 
-        vocab_size, label_type, n_labels, n_prior_covars, n_topic_covars):
+    def __init__(self, vocab, input_dir, K, alpha, learning_rate, embeddings, options, 
+        vocab_size, label_type, n_labels, n_prior_covars, n_topic_covars, init_bg):
+        self.vocab = vocab
+        self.input_dir = input_dir
         self.K = K
         self.alpha = alpha
         self.learning_rate = learning_rate
@@ -56,10 +58,17 @@ class ScholarModel(BaseEstimator):
 
 
     def fit(self, x, Y=None):
-        train_X = x['train_X']
-        train_labels = x['train_labels']
-        train_prior_covars = x['train_prior_covars']
-        train_topic_covars = x['train_topic_covars']
+        train_X = x
+        # ['train_X']
+        # train_labels = x['train_labels']
+        # if len(set(list(train_labels))) == 1:
+        train_labels = None
+        # train_prior_covars = x['train_prior_covars']
+        # if len(set(list(train_prior_covars))) == 1:
+        train_prior_covars = None
+        # train_topic_covars = x['train_topic_covars']
+        # if len(set(list(train_topic_covars))) == 1:
+        train_topic_covars = None
         print('Start training: K=%d, alpha=%s, rate=%s' % (self.K, self.alpha, self.learning_rate))
 
         if self.embeddings is None:
@@ -83,8 +92,8 @@ class ScholarModel(BaseEstimator):
             classify_from_covars=self.options.covars_predict)
 
         self.model = train(self.model, network_architecture, train_X, train_labels, 
-            train_prior_covars, train_topic_covars, training_epochs=options.epochs, 
-            batch_size=options.batch_size, rng=self.rng, X_dev=None, Y_dev=None, 
+            train_prior_covars, train_topic_covars, training_epochs=self.options.epochs, 
+            batch_size=self.options.batch_size, rng=self.rng, X_dev=None, Y_dev=None, 
             PC_dev=None, TC_dev=None) # TODO
 
 
@@ -99,15 +108,42 @@ class ScholarModel(BaseEstimator):
         return self.transform(x)
 
     def coherence(self, x):
-        coherence_score = compute_npmi(self.lda_model, self.corpus, self.id2word)
+        sparsity_threshold = 1e-5
+        feature_names = self.vocab
+        beta = self.model.get_weights()
+        lines = []
+        for i in range(len(beta)):
+            order = list(np.argsort(beta[i]))
+            order.reverse()
+            pos_words = [feature_names[j] for j in order[:100] if beta[i][j] > sparsity_threshold]
+            output = ' '.join(pos_words)
+            lines.append(output)
+
+        ref_vocab = fh.read_json(os.path.join(self.input_dir, 'train.vocab.json'))
+        ref_counts = fh.load_sparse(os.path.join(self.input_dir, 'train.npz')).tocsc()
+        coherence_score = compute_npmi_at_n(lines, ref_vocab, ref_counts)
         return coherence_score
 
-    def perplexity(self, x):
-        return np.exp(-1. * self.lda_model.log_perplexity(x))
+    def perplexity(self, test_X, test_labels, test_prior_covars, test_topic_covars):
+        perplexity_score = evaluate_perplexity(self.model, test_X, test_labels, test_prior_covars,
+            test_topic_covars, batch_size=self.options.batch_size)
+        return perplexity_score
 
     def score(self, x, y=None):
-        print('Generating scores: K=%d, alpha=%s, beta=%s' % (self.K, self.alpha, self.beta))
-        scores = {'perplexity': self.perplexity(x),
+        test_X = x
+        # ['test_X']
+        # test_labels = x['test_labels']
+        # if len(set(list(test_labels))) == 1:
+        test_labels = None
+        # test_prior_covars = x['test_prior_covars']
+        # if len(set(list(test_prior_covars))) == 1:
+        test_prior_covars = None
+        # test_topic_covars = x['test_topic_covars']
+        # if len(set(list(test_topic_covars))) == 1:
+        test_topic_covars = None
+
+        print('Generating scores: K=%d, alpha=%s, rate=%s' % (self.K, self.alpha, self.learning_rate))
+        scores = {'perplexity': self.perplexity(test_X, test_labels, test_prior_covars, test_topic_covars),
                 'coherence': self.coherence(x)}
         pprint(scores)
         print('====================\n\n\n')
@@ -240,73 +276,106 @@ def main(args):
     # combine the network configuration parameters into a dictionary
     # network_architecture = make_network(options, vocab_size, label_type, n_labels, n_prior_covars, n_topic_covars)
 
-    print("Network architecture:")
-    for key, val in network_architecture.items():
-        print(key + ':', val)
+    # print("Network architecture:")
+    # for key, val in network_architecture.items():
+    #     print(key + ':', val)
 
     # load word vectors
-    rand_embeddings, update_embeddings = load_word_vectors(None, rng, vocab)
-    conll17_embeddings, update_embeddings = load_word_vectors('conll17.bin', rng, vocab)
-    coosto_embeddings, update_embeddings = load_word_vectors('coosto.bin', rng, vocab)
-    cowbig_embeddings, update_embeddings = load_word_vectors('cow-big.txt', rng, vocab)
+    # rand_embeddings, update_embeddings = load_word_vectors(None, rng, vocab)
+    # conll17_embeddings, update_embeddings = load_word_vectors('conll17.bin', rng, vocab)
+    # coosto_embeddings, update_embeddings = load_word_vectors('coosto.bin', rng, vocab)
+    # cowbig_embeddings, update_embeddings = load_word_vectors('cow-big.txt', rng, vocab)
     roularta_embeddings, update_embeddings = load_word_vectors('roularta-320.txt', rng, vocab)
 
-    model = ScholarModel(2, learning_rate=options.learning_rate, embeddings=None, options=options, 
-        vocab_size, label_type, n_labels, n_prior_covars, n_topic_covars)
+    model = ScholarModel(vocab, input_dir, 2, alpha=options.alpha, learning_rate=options.learning_rate, 
+        embeddings=None, options=options, vocab_size=vocab_size, 
+        label_type=label_type, n_labels=n_labels, n_prior_covars=n_prior_covars, 
+        n_topic_covars=n_topic_covars, init_bg=init_bg)
 
+    if train_labels is None:
+        train_labels = [None] * train_X.shape[0]
+    if train_prior_covars is None:
+        train_prior_covars = [None] * train_X.shape[0]
+    if train_topic_covars is None:
+        train_topic_covars = [None] * train_X.shape[0]
 
-    trainset = pd.DataFrame() # TODO
-    model.fit(x)
+    trainset = pd.DataFrame(zip(train_X, train_labels, train_prior_covars, train_topic_covars), 
+        columns=['train_X', 'train_labels', 'train_prior_covars', 'train_topic_covars']) # TODO
+    # model.fit(trainset)
 
+    if test_labels is None:
+        test_labels = [None] * test_X.shape[0]
+    if not test_prior_covars:
+        test_prior_covars = [None] * test_X.shape[0]
+    if not test_topic_covars:
+        test_topic_covars = [None] * test_X.shape[0]
+    # print(test_X, test_prior_covars)
 
+    testset = pd.DataFrame(zip(test_X, test_labels, test_prior_covars, test_topic_covars), 
+        columns=['test_X', 'test_labels', 'test_prior_covars', 'test_topic_covars']) # TODO
+
+    search_params = {'K': list(range(3, 4)), 
+        # 'alpha': [ 0.1, 0.3, 0.5, 0.7, 0.9, 1, 2, 5],
+        # 'learning_rate': [0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05, 0.1, 0.5],
+        # 'embeddings': [None, conll17_embeddings, coosto_embeddings, cowbig_embeddings, roularta_embeddings]
+        'embeddings': [None, roularta_embeddings]
+    }
+
+    grid_model = GridSearchCV(model, param_grid=search_params, scoring=ScholarModel.score, refit='perplexity')
+    grid_model.fit(train_X)
+
+    pprint(grid_model.score(test_X))
+
+    pandas.DataFrame(grid_model.cv_results_).to_csv('Scholar_gridsearch.csv')
     # create the model
     # model = Scholar(network_architecture, alpha=options.alpha, learning_rate=options.learning_rate, init_embeddings=embeddings, update_embeddings=update_embeddings, init_bg=init_bg, adam_beta1=options.momentum, device=options.device, seed=seed, classify_from_covars=options.covars_predict)
 
     # train the model
-    print("Optimizing full model")
-    model = train(model, network_architecture, train_X, train_labels, train_prior_covars, train_topic_covars, training_epochs=options.epochs, batch_size=options.batch_size, rng=rng, X_dev=dev_X, Y_dev=dev_labels, PC_dev=dev_prior_covars, TC_dev=dev_topic_covars)
+    # print("Optimizing full model")
+    # # model = train(model, network_architecture, train_X, train_labels, train_prior_covars, train_topic_covars, training_epochs=options.epochs, batch_size=options.batch_size, rng=rng, X_dev=dev_X, Y_dev=dev_labels, PC_dev=dev_prior_covars, TC_dev=dev_topic_covars)
 
-    # make output directory
-    fh.makedirs(options.output_dir)
+    # # make output directory
+    # fh.makedirs(options.output_dir)
 
-    # display and save weights
-    print_and_save_weights(options, model, vocab, prior_covar_names, topic_covar_names)
+    # # display and save weights
+    # print_and_save_weights(options, model, vocab, prior_covar_names, topic_covar_names)
 
-    # Evaluate perplexity on dev and test data
-    if dev_X is not None:
-        perplexity = evaluate_perplexity(model, dev_X, dev_labels, dev_prior_covars, dev_topic_covars, options.batch_size, eta_bn_prop=0.0)
-        print("Dev perplexity = %0.4f" % perplexity)
-        fh.write_list_to_text([str(perplexity)], os.path.join(options.output_dir, 'perplexity.dev.txt'))
 
-    if test_X is not None:
-        perplexity = evaluate_perplexity(model, test_X, test_labels, test_prior_covars, test_topic_covars, options.batch_size, eta_bn_prop=0.0)
-        print("Test perplexity = %0.4f" % perplexity)
-        fh.write_list_to_text([str(perplexity)], os.path.join(options.output_dir, 'perplexity.test.txt'))
+    # # Evaluate perplexity on dev and test data
+    # if dev_X is not None:
+    #     perplexity = evaluate_perplexity(model, dev_X, dev_labels, dev_prior_covars, dev_topic_covars, options.batch_size, eta_bn_prop=0.0)
+    #     print("Dev perplexity = %0.4f" % perplexity)
+    #     fh.write_list_to_text([str(perplexity)], os.path.join(options.output_dir, 'perplexity.dev.txt'))
 
-    # evaluate accuracy on predicting labels
-    if n_labels > 0:
-        print("Predicting labels")
-        predict_labels_and_evaluate(model, train_X, train_labels, train_prior_covars, train_topic_covars, options.output_dir, subset='train')
+    # if test_X is not None:
+    #     perplexity = evaluate_perplexity(model, test_X, test_labels, test_prior_covars, test_topic_covars, options.batch_size, eta_bn_prop=0.0)
+    #     print("Test perplexity = %0.4f" % perplexity)
+    #     fh.write_list_to_text([str(perplexity)], os.path.join(options.output_dir, 'perplexity.test.txt'))
 
-        if dev_X is not None:
-            predict_labels_and_evaluate(model, dev_X, dev_labels, dev_prior_covars, dev_topic_covars, options.output_dir, subset='dev')
+    # # evaluate accuracy on predicting labels
+    # if n_labels > 0:
+    #     print("Predicting labels")
+    #     predict_labels_and_evaluate(model, train_X, train_labels, train_prior_covars, train_topic_covars, options.output_dir, subset='train')
 
-        if test_X is not None:
-            predict_labels_and_evaluate(model, test_X, test_labels, test_prior_covars, test_topic_covars, options.output_dir, subset='test')
+    #     if dev_X is not None:
+    #         predict_labels_and_evaluate(model, dev_X, dev_labels, dev_prior_covars, dev_topic_covars, options.output_dir, subset='dev')
 
-    # print label probabilities for each topic
-    if n_labels > 0:
-        print_topic_label_associations(options, label_names, model, n_prior_covars, n_topic_covars)
+    #     if test_X is not None:
+    #         predict_labels_and_evaluate(model, test_X, test_labels, test_prior_covars, test_topic_covars, options.output_dir, subset='test')
 
-    # save document representations
-    print("Saving document representations")
-    save_document_representations(model, train_X, train_labels, train_prior_covars, train_topic_covars, train_ids, options.output_dir, 'train', batch_size=options.batch_size)
+    # # print label probabilities for each topic
+    # if n_labels > 0:
+    #     print_topic_label_associations(options, label_names, model, n_prior_covars, n_topic_covars)
 
-    if dev_X is not None:
-        save_document_representations(model, dev_X, dev_labels, dev_prior_covars, dev_topic_covars, dev_ids, options.output_dir, 'dev', batch_size=options.batch_size)
+    # # save document representations
+    # print("Saving document representations")
+    # save_document_representations(model, train_X, train_labels, train_prior_covars, train_topic_covars, train_ids, options.output_dir, 'train', batch_size=options.batch_size)
 
-    if n_test > 0:
-        save_document_representations(model, test_X, test_labels, test_prior_covars, test_topic_covars, test_ids, options.output_dir, 'test', batch_size=options.batch_size)
+    # if dev_X is not None:
+    #     save_document_representations(model, dev_X, dev_labels, dev_prior_covars, dev_topic_covars, dev_ids, options.output_dir, 'dev', batch_size=options.batch_size)
+
+    # if n_test > 0:
+    #     save_document_representations(model, test_X, test_labels, test_prior_covars, test_topic_covars, test_ids, options.output_dir, 'test', batch_size=options.batch_size)
 
 
 def load_word_counts(input_dir, input_prefix, vocab=None):
@@ -444,17 +513,24 @@ def get_init_bg(data):
     return bg
 
 
-def load_word_vectors(word2vec_file, rng, vocab):
+def load_word_vectors(filename, rng, vocab):
     # load word2vec vectors if given
-    if word2vec_file is not None:
+    if filename is not None:
         vocab_size = len(vocab)
         vocab_dict = dict(zip(vocab, range(vocab_size)))
         # randomly initialize word vectors for each term in the vocabualry
-        embeddings = np.array(rng.rand(300, vocab_size) * 0.25 - 0.5, dtype=np.float32)
-        count = 0
+
         print("Loading word vectors")
         # load the word2vec vectors
-        pretrained = gensim.models.KeyedVectors.load_word2vec_format(word2vec_file, binary=True)
+        if filename.endswith('.txt'):
+            pretrained = gensim.models.KeyedVectors.load_word2vec_format(filename)
+        else:
+            pretrained = gensim.models.KeyedVectors.load_word2vec_format(filename, binary=True)
+
+        emb_dim = pretrained.vector_size
+
+        embeddings = np.array(rng.rand(emb_dim, vocab_size) * 0.25 - 0.5, dtype=np.float32)
+        count = 0
 
         # replace the randomly initialized vectors with the word2vec ones for any that are available
         for word, index in vocab_dict.items():
@@ -463,7 +539,7 @@ def load_word_vectors(word2vec_file, rng, vocab):
                 embeddings[:, index] = pretrained[word]
 
         print("Found embeddings for %d words" % count)
-        update_embeddings = False
+        update_embeddings = True
     else:
         embeddings = None
         update_embeddings = True
@@ -883,6 +959,45 @@ def save_document_representations(model, X, Y, PC, TC, ids, output_dir, partitio
     theta = np.vstack(thetas)
 
     np.savez(os.path.join(output_dir, 'theta.' + partition + '.npz'), theta=theta, ids=ids)
+
+
+def compute_npmi_at_n(topics, ref_vocab, ref_counts, n=10, cols_to_skip=0):
+
+    vocab_index = dict(zip(ref_vocab, range(len(ref_vocab))))
+    n_docs, _ = ref_counts.shape
+
+    npmi_means = []
+    for topic in topics:
+        words = topic.split()[cols_to_skip:]
+        npmi_vals = []
+        for word_i, word1 in enumerate(words[:n]):
+            if word1 in vocab_index:
+                index1 = vocab_index[word1]
+            else:
+                index1 = None
+            for word2 in words[word_i+1:n]:
+                if word2 in vocab_index:
+                    index2 = vocab_index[word2]
+                else:
+                    index2 = None
+                if index1 is None or index2 is None:
+                    npmi = 0.0
+                else:
+                    col1 = np.array(ref_counts[:, index1].todense() > 0, dtype=int)
+                    col2 = np.array(ref_counts[:, index2].todense() > 0, dtype=int)
+                    c1 = col1.sum()
+                    c2 = col2.sum()
+                    c12 = np.sum(col1 * col2)
+                    if c12 == 0:
+                        npmi = 0.0
+                    else:
+                        npmi = (np.log10(n_docs) + np.log10(c12) - np.log10(c1) - np.log10(c2)) / (np.log10(n_docs) - np.log10(c12))
+                npmi_vals.append(npmi)
+        print(str(np.mean(npmi_vals)) + ': ' + ' '.join(words[:n]))
+        npmi_means.append(np.mean(npmi_vals))
+    print(np.mean(npmi_means))
+    return np.mean(npmi_means)
+
 
 
 if __name__ == '__main__':
