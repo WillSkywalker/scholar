@@ -326,7 +326,7 @@ def main(args):
 
     pprint(grid_model.score(test_X))
 
-    pandas.DataFrame(grid_model.cv_results_).to_csv('Scholar_gridsearch.csv')
+    pandas.DataFrame(grid_model.cv_results_).to_csv(options.output_dir+'.csv')
     # create the model
     # model = Scholar(network_architecture, alpha=options.alpha, learning_rate=options.learning_rate, init_embeddings=embeddings, update_embeddings=update_embeddings, init_bg=init_bg, adam_beta1=options.momentum, device=options.device, seed=seed, classify_from_covars=options.covars_predict)
 
