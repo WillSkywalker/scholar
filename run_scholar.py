@@ -5,6 +5,8 @@ from optparse import OptionParser
 import gensim
 import numpy as np
 import pandas as pd
+import pyLDAvis
+import scipy
 
 import file_handling as fh
 from scholar import Scholar
@@ -73,6 +75,7 @@ def main(args):
     options, args = parser.parse_args(args)
 
     input_dir = args[0]
+    options.input_dir = input_dir
 
     if options.r:
         options.l1_topics = 1.0
@@ -186,7 +189,7 @@ def main(args):
 
     # save document representations
     print("Saving document representations")
-    save_document_representations(model, train_X, train_labels, train_prior_covars, train_topic_covars, train_ids, options.output_dir, 'train', batch_size=options.batch_size)
+    save_document_representations(model, train_X, train_labels, train_prior_covars, train_topic_covars, train_ids, options.output_dir, 'train', batch_size=options.batch_size, vocab=vocab, options=options)
 
     if dev_X is not None:
         save_document_representations(model, dev_X, dev_labels, dev_prior_covars, dev_topic_covars, dev_ids, options.output_dir, 'dev', batch_size=options.batch_size)
@@ -579,7 +582,7 @@ def print_and_save_weights(options, model, vocab, prior_covar_names=None, topic_
     # print topics
     emb = model.get_weights()
     print("Topics:")
-    maw, sparsity = print_top_words(emb, vocab)
+    maw, sparsity, _ = print_top_words(emb, vocab)
     print("sparsity in topics = %0.4f" % sparsity)
     save_weights(options.output_dir, emb, bg, vocab, sparsity_threshold=1e-5)
 
@@ -601,10 +604,12 @@ def print_and_save_weights(options, model, vocab, prior_covar_names=None, topic_
     if topic_covar_names is not None:
         beta_c = model.get_covar_weights()
         print("Covariate deviations:")
-        maw, sparsity = print_top_words(beta_c, vocab, topic_covar_names)
+        maw, sparsity, output = print_top_words(beta_c, vocab, topic_covar_names)
         print("sparsity in covariates = %0.4f" % sparsity)
         if options.output_dir is not None:
             np.savez(os.path.join(options.output_dir, 'beta_c.npz'), beta=beta_c, names=topic_covar_names)
+            with open(os.path.join(options.output_dir, 'covariate.txt'), 'w') as f:
+                f.write(output)
 
         if options.interactions:
             print("Covariate interactions")
@@ -614,9 +619,11 @@ def print_and_save_weights(options, model, vocab, prior_covar_names=None, topic_
                 names = [str(k) + ':' + c for k in range(options.n_topics) for c in topic_covar_names]
             else:
                 names = None
-            maw, sparsity = print_top_words(beta_ci, vocab, names)
+            maw, sparsity, output = print_top_words(beta_ci, vocab, names)
             if options.output_dir is not None:
                 np.savez(os.path.join(options.output_dir, 'beta_ci.npz'), beta=beta_ci, names=names)
+                with open(os.path.join(options.output_dir, 'interactions.txt'), 'w') as f:
+                    f.write(output)
             print("sparsity in covariate interactions = %0.4f" % sparsity)
 
 
@@ -626,6 +633,7 @@ def print_top_words(beta, feature_names, topic_names=None, n_pos=8, n_neg=8, spa
     """
     sparsity_vals = []
     maw_vals = []
+    all_outputs = ''
     for i in range(len(beta)):
         # sort the beta weights
         order = list(np.argsort(beta[i]))
@@ -661,9 +669,11 @@ def print_top_words(beta, feature_names, topic_names=None, n_pos=8, n_neg=8, spa
         else:
             output = str(i) + ': ' + output
         print(output)
+        all_outputs += output
+        all_outputs += '\n'
 
     # return mean average weight and sparsity
-    return np.mean(maw_vals), np.mean(sparsity_vals)
+    return np.mean(maw_vals), np.mean(sparsity_vals), all_outputs
 
 
 def print_top_bg(bg, feature_names, n_top_words=10):
@@ -761,7 +771,7 @@ def print_topic_label_associations(options, label_names, model, n_prior_covars, 
     np.savez(os.path.join(options.output_dir, 'topics_to_labels.npz'), probs=probs, label=label_names)
 
 
-def save_document_representations(model, X, Y, PC, TC, ids, output_dir, partition, batch_size=200):
+def save_document_representations(model, X, Y, PC, TC, ids, output_dir, partition, batch_size=200, vocab=None, options=None):
     # compute the mean of the posterior of the latent representation for each documetn and save it
     if Y is not None:
         Y = np.zeros_like(Y)
@@ -776,6 +786,26 @@ def save_document_representations(model, X, Y, PC, TC, ids, output_dir, partitio
     theta = np.vstack(thetas)
 
     np.savez(os.path.join(output_dir, 'theta.' + partition + '.npz'), theta=theta, ids=ids)
+    if vocab:
+
+        beta = model.get_weights()
+        bg = model.get_bg()
+        nb = np.apply_along_axis(scipy.special.softmax, 1, beta)
+
+        with open(os.path.join(options.input_dir, 'train.mallet.txt')) as f:
+            lengths = [len(line.split()) - 2 for line in f]
+
+        print(theta.shape)
+        print(len(lengths))
+
+        visdata = pyLDAvis.prepare(
+            topic_term_dists=nb,
+            doc_topic_dists=theta,
+            doc_lengths=lengths,
+            vocab=vocab,
+            term_frequency=bg,
+        )
+        pyLDAvis.save_html(visdata, os.path.join(output_dir, 'visualization.html'))
 
 
 if __name__ == '__main__':
