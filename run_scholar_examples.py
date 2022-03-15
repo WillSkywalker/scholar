@@ -107,7 +107,7 @@ class ScholarModel(BaseEstimator):
         self.fit(x)
         return self.transform(x)
 
-    def coherence(self, x):
+    def coherence(self, x, ref_vocab, ref_counts):
         sparsity_threshold = 1e-5
         feature_names = self.vocab
         beta = self.model.get_weights()
@@ -119,8 +119,8 @@ class ScholarModel(BaseEstimator):
             output = ' '.join(pos_words)
             lines.append(output)
 
-        ref_vocab = fh.read_json(os.path.join(self.input_dir, 'train.vocab.json'))
-        ref_counts = fh.load_sparse(os.path.join(self.input_dir, 'train.npz')).tocsc()
+        ref_vocab = fh.read_json(ref_vocab)
+        ref_counts = fh.load_sparse(ref_counts).tocsc()
         coherence_score = compute_npmi_at_n(lines, ref_vocab, ref_counts)
         return coherence_score
 
@@ -144,7 +144,18 @@ class ScholarModel(BaseEstimator):
 
         print('Generating scores: K=%d, alpha=%s, rate=%s' % (self.K, self.alpha, self.learning_rate))
         scores = {'perplexity': self.perplexity(test_X, test_labels, test_prior_covars, test_topic_covars),
-                'coherence': self.coherence(x)}
+                'internal_coherence': self.coherence(x, 
+                    os.path.join(self.input_dir, 'train.vocab.json'),
+                    os.path.join(self.input_dir, 'train.npz')),
+                'wainot_coherence': self.coherence(x,
+                    os.path.join('wai-not1.0', 'ref_counts.vocab.json'),
+                    os.path.join('wai-not1.0', 'ref_counts.npz')),
+                'viva_zwanger_coherence': self.coherence(x,
+                    os.path.join('viva-zwanger', 'ref_counts.vocab.json'),
+                    os.path.join('viva-zwanger', 'ref_counts.npz')),
+                'viva_kinderwens_coherence': self.coherence(x,
+                    os.path.join('viva-kinderwens', 'ref_counts.vocab.json'),
+                    os.path.join('viva-kinderwens', 'ref_counts.npz'))}
         pprint(scores)
         print('====================\n\n\n')
         return scores
