@@ -325,7 +325,7 @@ def main(args):
     testset = pd.DataFrame(zip(test_X, test_labels, test_prior_covars, test_topic_covars), 
         columns=['test_X', 'test_labels', 'test_prior_covars', 'test_topic_covars']) # TODO
 
-    search_params = {'K': list(range(3, 40)), 
+    search_params = {'K': list(range(3, 21)), 
         'alpha': [ 0.1, 0.3, 0.5, 0.7, 0.9, 1, 2, 5],
         'learning_rate': [0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05, 0.1, 0.5],
         'embeddings': [None, conll17_embeddings, coosto_embeddings, cowbig_embeddings, roularta_embeddings]

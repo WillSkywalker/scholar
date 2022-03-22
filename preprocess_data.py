@@ -367,27 +367,27 @@ def clean_text(text, strip_html=False, lower=True, keep_emails=False, keep_at_me
         text = text.lower()
     # eliminate email addresses
     if not keep_emails:
-        text = re.sub(r'\S+@\S+', ' ', text)
+        text = re.sub(r'\S+@\S+', '', text)
     # eliminate @mentions
     if not keep_at_mentions:
         text = re.sub(r'\s@\S+', ' ', text)
     # replace underscores with spaces
     text = re.sub(r'_', ' ', text)
     # break off single quotes at the ends of words
-    text = re.sub(r'\s\'', ' ', text)
-    text = re.sub(r'\'\s', ' ', text)
+    # text = re.sub(r'\s\'', ' ', text)
+    # text = re.sub(r'\'\s', ' ', text)
+    # replace single quotes with underscores
+    # text = re.sub(r'\'', '_', text)
     # remove periods
-    text = re.sub(r'\.', '', text)
-    # replace all other punctuation (except single quotes) with spaces
-    text = replace.sub(' ', text)
-    # remove single quotes
-    text = re.sub(r'\'', '', text)
+    text = re.sub(r'\.', ' ', text)
+    # replace all other punctuation with spaces
+    # text = replace.sub(' ', text)
+    text = re.sub(r'[^\w\s]', ' ', text)
     # replace all whitespace with a single space
-    text = re.sub(r'\s', ' ', text)
+    text = re.sub(r'\s+', ' ', text)
     # strip off spaces on either end
     text = text.strip()
     return text
-
 
 if __name__ == '__main__':
     main(sys.argv[1:])
