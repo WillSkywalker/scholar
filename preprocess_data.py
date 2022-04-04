@@ -9,6 +9,7 @@ import numpy as np
 import pandas as pd
 from scipy import sparse
 from scipy.io import savemat
+from nltk import bigrams, trigrams
 
 import file_handling as fh
 
@@ -330,7 +331,7 @@ def process_subset(items, parsed, label_fields, label_lists, vocab, output_dir, 
     return sparse_X, sage_aspect, sage_no_aspect, widx, vocab_for_sage
 
 
-def tokenize(text, strip_html=False, lower=True, keep_emails=False, keep_at_mentions=False, keep_numbers=False, keep_alphanum=False, min_length=3, stopwords=None, vocab=None):
+def tokenize(text, strip_html=False, lower=True, keep_emails=False, keep_at_mentions=False, keep_numbers=True, keep_alphanum=True, min_length=3, stopwords=None, vocab=None):
     text = clean_text(text, strip_html, lower, keep_emails, keep_at_mentions)
     tokens = text.split()
     if stopwords is not None:
@@ -346,11 +347,16 @@ def tokenize(text, strip_html=False, lower=True, keep_emails=False, keep_at_ment
         tokens = [t if len(t) >= min_length else '_' for t in tokens]
     counts = Counter()
     unigrams = [t for t in tokens if t != '_']
+    bi = ['_'.join(gram) for gram in bigrams(tokens) if '_' not in gram]
+    tri = ['_'.join(gram) for gram in trigrams(tokens) if '_' not in gram]
+
     counts.update(unigrams)
+    counts.update(bi)
+    counts.update(tri)
     if vocab is not None:
-        tokens = [token for token in unigrams if token in vocab]
+        tokens = [token for token in unigrams if token in vocab] + bi + tri
     else:
-        tokens = unigrams
+        tokens = unigrams + bi + tri
     return tokens, counts
 
 
