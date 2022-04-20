@@ -143,7 +143,7 @@ def main(args):
 
     corpus = gensim.matutils.Sparse2Corpus(train_X)
 
-    train_items = fh.read_jsonlist('data/kinderwens/train.jsonlist')
+    train_items = fh.read_jsonlist('data/kinderwens/all.jsonlist')
     train_text = [tokenize(t['text'], stopwords=stopword_set)[0] for t in train_items]
     train_texts = [clean_text(t['text']) for t in train_items]
     vectorizer = CountVectorizer(analyzer='word',       
@@ -154,7 +154,9 @@ def main(args):
     data_vectorized = vectorizer.fit_transform(train_texts)
 
     id2word = gensim.corpora.Dictionary(train_text)
-    text_corpus = [id2word.doc2bow(text) for text in train_text]
+    id2word.filter_extremes(no_below=2, no_above=0.4)
+    id2word.compactify()
+    text_corpus = [id2word.doc2bow(text, allow_update=True) for text in train_text]
     tfidf_model = gensim.models.TfidfModel(text_corpus)
     tfidf_corpus = tfidf_model[text_corpus]
 
@@ -176,7 +178,7 @@ def main(args):
     lda1 = LDAModel(6, 0.3, 0.7, id2word, corpus=text_corpus ,train_text=train_text)
     lda1.fit(text_corpus)
     lda1.score(test_corpus)
-    lda2 = LDAModel(6, 'auto', 5, id2word, corpus=text_corpus ,train_text=train_text)
+    lda2 = LDAModel(6, 'auto', 'auto', id2word, corpus=text_corpus ,train_text=train_text)
     lda2.fit(text_corpus)
     lda2.score(test_corpus)
 
