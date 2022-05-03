@@ -55,14 +55,8 @@ for idx in range(len(nzwanger)):
         if '_' in token:
             nzwanger[idx].append(token)
 
-zwanger = [[w for w in t if w not in STOPWORD_SET] for t in zwanger]
-nzwanger = [[w for w in t if w not in STOPWORD_SET] for t in nzwanger]
 zwanger_dict = gensim.corpora.Dictionary(zwanger)
-zwanger_dict.filter_extremes(no_below=2, no_above=0.5)
-zwanger_dict.compactify()
 nzwanger_dict = gensim.corpora.Dictionary(nzwanger)
-nzwanger_dict.filter_extremes(no_below=2, no_above=0.5)
-nzwanger_dict.compactify()
 zwanger = [zwanger_dict.doc2bow(text) for text in zwanger]
 nzwanger = [nzwanger_dict.doc2bow(text) for text in nzwanger]
 
@@ -81,17 +75,10 @@ for idx in range(len(nkinderwens)):
         if '_' in token:
             nkinderwens[idx].append(token)
 
-kinderwens = [[w for w in t if w not in STOPWORD_SET] for t in kinderwens]
-nkinderwens = [[w for w in t if w not in STOPWORD_SET] for t in nkinderwens]
-
 kinderwens_dict = gensim.corpora.Dictionary(kinderwens)
-kinderwens_dict.filter_extremes(no_below=2, no_above=0.5)
-kinderwens_dict.compactify()
 kinderwens = [kinderwens_dict.doc2bow(text) for text in kinderwens]
 
 nkinderwens_dict = gensim.corpora.Dictionary(nkinderwens)
-nkinderwens_dict.filter_extremes(no_below=2, no_above=0.5)
-nkinderwens_dict.compactify()
 nkinderwens = [nkinderwens_dict.doc2bow(text) for text in nkinderwens]
 
 
