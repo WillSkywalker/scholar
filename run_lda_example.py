@@ -99,7 +99,7 @@ class LDAModel(BaseEstimator):
         self.passes = passes
         self.iterations = iterations
 
-        if 'ngram' in corpuses[0]:
+        if 'ngram' in self.corpuses[0]:
             self.zwanger = nzwanger
             self.zwanger_dict = nzwanger_dict
             self.kinderwens = nkinderwens
@@ -155,7 +155,7 @@ class LDAModel(BaseEstimator):
         return np.exp(-1. * self.lda_model.log_perplexity(x))
 
     def score(self, x, y=None):
-        if 'ngram' in corpuses[0]:
+        if 'ngram' in self.corpuses[0]:
             self.zwanger = nzwanger
             self.zwanger_dict = nzwanger_dict
             self.kinderwens = nkinderwens
@@ -165,7 +165,7 @@ class LDAModel(BaseEstimator):
             self.zwanger_dict = zwanger_dict
             self.kinderwens = kinderwens
             self.kinderwens_dict = kinderwens_dict
-            
+
         print('Generating scores: K=%d, corpus=%s, alpha=%s, beta=%s' % (self.K, self.input_corpus,self.alpha, self.beta))
         scores = {'perplexity': self.perplexity(x),
                 'coherence_internal': self.coherence(x),
