@@ -167,7 +167,7 @@ class LDAModel(BaseEstimator):
             self.kinderwens_dict = kinderwens_dict
 
         print('Generating scores: K=%d, corpus=%s, alpha=%s, beta=%s' % (self.K, self.input_corpus,self.alpha, self.beta))
-        scores = {'perplexity': self.perplexity(self.corpus),
+        scores = {'perplexity': self.perplexity(x),
                 'coherence_internal': self.coherence(x),
                 'coherence_zwanger': self.coherence_zwanger(x),
                 'coherence_kinderwens': self.coherence_kinderwens(x)}
@@ -308,10 +308,11 @@ def main(args):
                      ('all-tfidf', tfidf_corpus, id2word),
                      ('all-original-ngrams', ngram_corpus, id2word_ngram),
                      ('all-tfidf-ngrams', ngram_tfidf_corpus, id2word_ngram),
-                     ('q1-original', q1_text_corpus, q1_id2word),
-                     ('q1-tfidf', q1_tfidf_corpus, q1_id2word),
-                     ('q1-original-ngrams', q1_ngram_corpus, q1_id2word_ngram),
-                     ('q1-tfidf-ngrams', q1_ngram_tfidf_corpus, q1_id2word_ngram),]
+                     # ('q1-original', q1_text_corpus, q1_id2word),
+                     # ('q1-tfidf', q1_tfidf_corpus, q1_id2word),
+                     # ('q1-original-ngrams', q1_ngram_corpus, q1_id2word_ngram),
+                     # ('q1-tfidf-ngrams', q1_ngram_tfidf_corpus, q1_id2word_ngram),
+                     ]
 
     }
 
@@ -338,7 +339,7 @@ def main(args):
     grid_model.fit(text_corpus)
     # pprint(grid_model.score(test_corpus))
 
-    pandas.DataFrame(grid_model.cv_results_).to_csv('LDA_gridsearch_0522.csv')
+    pandas.DataFrame(grid_model.cv_results_).to_csv('LDA_gridsearch_0522_both.csv')
 
 
 
