@@ -167,7 +167,7 @@ class LDAModel(BaseEstimator):
             self.kinderwens_dict = kinderwens_dict
 
         print('Generating scores: K=%d, corpus=%s, alpha=%s, beta=%s' % (self.K, self.input_corpus,self.alpha, self.beta))
-        scores = {'perplexity': self.perplexity(x),
+        scores = {'perplexity': self.perplexity(self.corpus),
                 'coherence_internal': self.coherence(x),
                 'coherence_zwanger': self.coherence_zwanger(x),
                 'coherence_kinderwens': self.coherence_kinderwens(x)}
@@ -492,7 +492,7 @@ def compute_npmi(model, corpus, id2word, n=10):
                     else:
                         npmi = (np.log10(n_docs) + np.log10(c12) - np.log10(c1) - np.log10(c2)) / (np.log10(n_docs) - np.log10(c12))
                 npmi_vals.append(npmi)
-        print(str(np.mean(npmi_vals)) + ': ' + ' '.join([id2word.get(w) for w in words[:n]]))
+        print(str(np.mean(npmi_vals)) + ': ' + ' '.join([str(id2word.get(w)) for w in words[:n]]))
         npmi_means.append(np.mean(npmi_vals))
     print(np.mean(npmi_means))
     return np.mean(npmi_means)
