@@ -126,7 +126,7 @@ class LDAModel(BaseEstimator):
         else:
             self.lda_model = gensim.models.ldamulticore.LdaMulticore(x, 
                 num_topics=self.K, alpha=self.alpha, eta=self.beta, 
-                id2word=self.id2word, passes=self.passes, iterations=self.iterations, workers=2)
+                id2word=self.id2word, passes=self.passes, iterations=self.iterations, workers=16)
 
     def transform(self, x):
         doc_topic_distr = []
@@ -492,7 +492,7 @@ def compute_npmi(model, corpus, id2word, n=10):
                     else:
                         npmi = (np.log10(n_docs) + np.log10(c12) - np.log10(c1) - np.log10(c2)) / (np.log10(n_docs) - np.log10(c12))
                 npmi_vals.append(npmi)
-        print(str(np.mean(npmi_vals)) + ': ' + ' '.join([id2word[w] for w in words[:n]]))
+        print(str(np.mean(npmi_vals)) + ': ' + ' '.join([id2word.get(w) for w in words[:n]]))
         npmi_means.append(np.mean(npmi_vals))
     print(np.mean(npmi_means))
     return np.mean(npmi_means)
