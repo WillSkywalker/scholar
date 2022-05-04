@@ -49,7 +49,7 @@ with open('zwanger.txt', 'r') as f:
         zwanger.append(words)
 
 nzwanger = zwanger[:]
-zwanger_bigram = Phrases(nzwanger, min_count=2)
+zwanger_bigram = Phrases(nzwanger)
 for idx in range(len(nzwanger)):
     for token in zwanger_bigram[nzwanger[idx]]:
         if '_' in token:
@@ -69,7 +69,7 @@ with open('kinderwens.txt', 'r') as f:
         kinderwens.append(words)
 
 nkinderwens = kinderwens[:]
-kind_bigram = Phrases(nkinderwens, min_count=2)
+kind_bigram = Phrases(nkinderwens)
 for idx in range(len(nkinderwens)):
     for token in kind_bigram[nkinderwens[idx]]:
         if '_' in token:
@@ -155,6 +155,17 @@ class LDAModel(BaseEstimator):
         return np.exp(-1. * self.lda_model.log_perplexity(x))
 
     def score(self, x, y=None):
+        if 'ngram' in corpuses[0]:
+            self.zwanger = nzwanger
+            self.zwanger_dict = nzwanger_dict
+            self.kinderwens = nkinderwens
+            self.kinderwens_dict = nkinderwens_dict
+        else:
+            self.zwanger = zwanger
+            self.zwanger_dict = zwanger_dict
+            self.kinderwens = kinderwens
+            self.kinderwens_dict = kinderwens_dict
+            
         print('Generating scores: K=%d, corpus=%s, alpha=%s, beta=%s' % (self.K, self.input_corpus,self.alpha, self.beta))
         scores = {'perplexity': self.perplexity(x),
                 'coherence_internal': self.coherence(x),
@@ -463,21 +474,23 @@ def compute_npmi(model, corpus, id2word, n=10):
 
     npmi_means = []
     for idx in range(model.num_topics):
-        words = [id2word.token2id[x[0]] for x in model.show_topic(idx)]
+        words = [id2word.token2id.get(x[0]) for x in model.show_topic(idx)]
         npmi_vals = []
 
         for word_i, word1 in enumerate(words[:n]):
             for word2 in words[word_i+1:n]:
-
-                col1 = np.array(ref_counts[:, word1] > 0, dtype=int)
-                col2 = np.array(ref_counts[:, word2] > 0, dtype=int)
-                c1 = col1.sum()
-                c2 = col2.sum()
-                c12 = np.sum(col1 * col2)
-                if c12 == 0:
+                if word1 is None or word2 is None:
                     npmi = 0.0
                 else:
-                    npmi = (np.log10(n_docs) + np.log10(c12) - np.log10(c1) - np.log10(c2)) / (np.log10(n_docs) - np.log10(c12))
+                    col1 = np.array(ref_counts[:, word1] > 0, dtype=int)
+                    col2 = np.array(ref_counts[:, word2] > 0, dtype=int)
+                    c1 = col1.sum()
+                    c2 = col2.sum()
+                    c12 = np.sum(col1 * col2)
+                    if c12 == 0:
+                        npmi = 0.0
+                    else:
+                        npmi = (np.log10(n_docs) + np.log10(c12) - np.log10(c1) - np.log10(c2)) / (np.log10(n_docs) - np.log10(c12))
                 npmi_vals.append(npmi)
         print(str(np.mean(npmi_vals)) + ': ' + ' '.join([id2word[w] for w in words[:n]]))
         npmi_means.append(np.mean(npmi_vals))
