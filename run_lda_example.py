@@ -126,7 +126,7 @@ class LDAModel(BaseEstimator):
         else:
             self.lda_model = gensim.models.ldamulticore.LdaMulticore(x, 
                 num_topics=self.K, alpha=self.alpha, eta=self.beta, 
-                id2word=self.id2word, passes=self.passes, iterations=self.iterations, workers=16)
+                id2word=self.id2word, passes=self.passes, iterations=self.iterations, workers=2)
 
     def transform(self, x):
         doc_topic_distr = []
@@ -299,19 +299,20 @@ def main(args):
     # ldamodel = gensim.models.ldamodel.LdaModel(corpus, num_topics=options.n_topics, id2word=dictionary)
     # ldamodel = gensim.models.ldamodel.LdaModel(text_corpus, num_topics=options.n_topics, id2word=id2word)
 
-    search_params = {'K': list(range(3, 13)), 
+    search_params = {'K': [9], 
         'alpha': ['symmetric', 'auto', 0.1, 0.3, 0.5, 0.7, 0.9, 1, 2, 5],
         'beta': ['symmetric', 'auto', 0.1, 0.3, 0.5, 0.7, 0.9, 1, 2, 5],
         'passes': [1, 2, 5, 10, 20, 50, 100],
         'iterations': [50, 100, 200, 400],
-        'corpuses': [('all-original', text_corpus, id2word),
-                     ('all-tfidf', tfidf_corpus, id2word),
-                     ('all-original-ngrams', ngram_corpus, id2word_ngram),
-                     ('all-tfidf-ngrams', ngram_tfidf_corpus, id2word_ngram),
-                     # ('q1-original', q1_text_corpus, q1_id2word),
-                     # ('q1-tfidf', q1_tfidf_corpus, q1_id2word),
-                     # ('q1-original-ngrams', q1_ngram_corpus, q1_id2word_ngram),
-                     # ('q1-tfidf-ngrams', q1_ngram_tfidf_corpus, q1_id2word_ngram),
+        'corpuses': [
+                     # ('all-original', text_corpus, id2word),
+                     # ('all-tfidf', tfidf_corpus, id2word),
+                     # ('all-original-ngrams', ngram_corpus, id2word_ngram),
+                     # ('all-tfidf-ngrams', ngram_tfidf_corpus, id2word_ngram),
+                     ('q1-original', q1_text_corpus, q1_id2word),
+                     ('q1-tfidf', q1_tfidf_corpus, q1_id2word),
+                     ('q1-original-ngrams', q1_ngram_corpus, q1_id2word_ngram),
+                     ('q1-tfidf-ngrams', q1_ngram_tfidf_corpus, q1_id2word_ngram),
                      ]
 
     }
@@ -319,8 +320,8 @@ def main(args):
     test_corpus = gensim.matutils.Sparse2Corpus(test_X)
 
 
-    lda = LDAModel(3, 'symmetric', 'symmetric', ('all-original', text_corpus, id2word),
-        train_text=train_text)
+    lda = LDAModel(9, 'symmetric', 'symmetric', ('q1-original', q1_text_corpus, q1_id2word),
+        train_text=q1_train_text)
     # lda1 = LDAModel(6, 0.3, 0.7, id2word, corpus=text_corpus ,train_text=train_text)
     # lda1.fit(text_corpus)
     # lda1.score(test_corpus)
@@ -336,10 +337,10 @@ def main(args):
     # lda4.score(test_corpus)
 
     grid_model = GridSearchCV(lda, param_grid=search_params, scoring=LDAModel.score, refit='perplexity')
-    grid_model.fit(text_corpus)
+    grid_model.fit(q1_text_corpus)
     # pprint(grid_model.score(test_corpus))
 
-    pandas.DataFrame(grid_model.cv_results_).to_csv('LDA_gridsearch_0522_both.csv')
+    pandas.DataFrame(grid_model.cv_results_).to_csv('LDA_gridsearch_0918_q1.csv')
 
 
 
