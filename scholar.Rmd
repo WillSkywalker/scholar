@@ -1,0 +1,100 @@
+---
+title: "gtest"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+data <- read.csv('9-q1-output.csv')
+```
+
+## Including Plots
+
+
+```{r}
+library(tidyverse)
+
+library("ggpubr")
+library("ggplot2")
+
+ggboxplot(data, x = "partner", y = "X0", 
+          color = "partner", palette = c("#00AFBB", "#E7B800"),
+          ylab = "Weight", xlab = "Groups")
+
+```
+
+```{r}
+res <- wilcox.test(X6 ~ partner, data = data,
+                   exact = FALSE)
+res
+
+```
+
+```{r}
+sdata <- reshape(data, direction='long', varying=paste0('X', 0:8), v.names='topic',)
+
+sdata <- sdata %>% 
+  mutate(
+    edulevel = case_when(
+      education == "basisonderwijs" ~ "low/medium",
+      education == "vmbo" ~ "low/medium",
+      education == "havo/vwo" ~ "low/medium",
+      education == "mbo" ~ "low/medium",
+      education == "hbo" ~ "high",
+      education == "wo" ~ "high",
+      ))
+```
+
+
+```{r}
+
+df.summary2 <- sdata %>%
+  group_by(time, partner) %>%
+  summarise_at("topic", list(sd=sd, mean=mean, Q1=~quantile(., probs = 0.25),
+                    median=median, Q3=~quantile(., probs = 0.75)))
+
+df.summary2
+
+```
+
+
+```{r, fig.height=8, fig.width=6}
+stat.test <- compare_means(topic ~ partner,data = sdata, group.by = "time", method = "wilcox.test") 
+
+
+ggplot(df.summary2) +
+  geom_pointrange(
+    aes(x=time, y=median, ymin = Q1, ymax = Q3, color = partner),
+    position = position_dodge(0.5)
+    )+
+  scale_color_manual(values = c("#00AFBB", "#E7B800")) +
+  stat_pvalue_manual(stat.test, xmin="time", xmax="time", label = "p.signif", y.position = 0.2, hide.ns=T) +
+  labs(title="Popularity of topics \n without partner vs. with partner",
+        y="Topic prevalance in responses", x = "", fill="Does the respondent have a partner?") + 
+  scale_x_reverse() +
+  coord_flip() + 
+  scale_x_continuous(breaks=c(9，8，7，6，5，4，3，2，1),labels =c(
+    "Health concerns about pregnancy",
+    "Satisfaction with current family",
+    "Being a student",
+    "Age",
+    "Uncertainty in life",
+    "Dissatisfaction",
+    "Positive to have children",
+    "Too young / in an early stage of considering",
+    "Obstacles in getting pregnant"
+  )) 
+
+```
+
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
