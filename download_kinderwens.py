@@ -85,6 +85,12 @@ class Kinderwens:
                         'positivity': member['Intentie1'] in POSITIVE_SET,
                         'certainty': member['Intentie1'] in CERTAINTY_SET,
                         'maternity': member['Zelf_Kind'] == 'Ja',
+                        'age': member['leeftijd'],
+                        'partner': member['partner'],
+                        'woning': member['woning'],
+                        'income': member['brutoink'],
+                        'education': member['oplcat']
+
                         }
                 elif member['nonresponse2'] != 0:
                     doc = {
@@ -96,6 +102,11 @@ class Kinderwens:
                         'positivity': member['Intentie1'] in POSITIVE_SET,
                         'certainty': member['Intentie1'] in CERTAINTY_SET,
                         'maternity': member['Zelf_Kind'] == 'Ja',
+                        'age': member['leeftijd'],
+                        'partner': member['partner'],
+                        'woning': member['woning'],
+                        'income': member['brutoink'],
+                        'education': member['oplcat']
                         }
                 else:
                     doc = {
@@ -107,6 +118,11 @@ class Kinderwens:
                         'positivity': member['Intentie1'] in POSITIVE_SET,
                         'certainty': member['Intentie1'] in CERTAINTY_SET,
                         'maternity': member['Zelf_Kind'] == 'Ja',
+                        'age': member['leeftijd'],
+                        'partner': member['partner'],
+                        'woning': member['woning'],
+                        'income': member['brutoink'],
+                        'education': member['oplcat']
                         }
 
 
