@@ -107,3 +107,4 @@ output
 # IntelliJ
 *.iml
 .idea
+.Rproj.user
